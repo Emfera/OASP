@@ -231,7 +231,8 @@ let chain = Promise.resolve();        // serialisiert alle Sicherungen
 /* ---------- Protokoll ---------- */
 function log(type, detail, cls=''){
   const t=nowIso(); const el=document.createElement('div'); if(cls) el.className=cls;
-  el.textContent=`${t.slice(11,19)}  ${type}${detail?' – '+detail:''}`; $('log').prepend(el);
+  el.textContent=`${new Date(t).toLocaleTimeString('de-AT')}  ${type}${detail?' – '+detail:''}`; $('log').prepend(el); // Anzeige in Ortszeit, gespeichert wird UTC
+ 
   if(db && S.sid) tx(['events'],'readwrite', t2=>t2.objectStore('events').add({sid:S.sid,t,type,detail:detail||''})).catch(()=>{});
 }
 
@@ -324,7 +325,7 @@ let actx=null;
 function tone(freq, ms){ if(!$('optBeep').checked) return; try{ actx=actx||new AudioContext(); const o=actx.createOscillator(), g=actx.createGain(); o.frequency.value=freq; g.gain.value=.15; o.connect(g); g.connect(actx.destination); o.start(); o.stop(actx.currentTime+ms/1000); }catch(e){} }
 function beep(){ tone(1320,60); if($('optVibe').checked&&navigator.vibrate) navigator.vibrate(40); }
 function alarm(strong){ tone(440,400); setTimeout(()=>tone(440,400),550); if(strong) setTimeout(()=>tone(440,400),1100); if($('optVibe').checked&&navigator.vibrate) navigator.vibrate([300,120,300,120,300]); }
-async function keepAwake(){ try{ if('wakeLock' in navigator && !wakeLock){ wakeLock=await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release',()=>{wakeLock=null;}); } }catch(e){ log('Wake Lock nicht möglich', e.message,'warn'); } }
+async function keepAwake(){ try{ if('wakeLock' in navigator && !wakeLock){ wakeLock=await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release',()=>{wakeLock=null;}); } }catch(e){ log('Bildschirm bleibt nicht automatisch an', (/permissions policy/i.test(e.message)?'in dieser Vorschau gesperrt – ':'')+e.message,'warn'); } }
 document.addEventListener('visibilitychange',()=>{ log(document.hidden?'Seite verborgen':'Seite sichtbar', document.hidden?'Browser kann Empfang drosseln':'', document.hidden?'warn':''); if(!document.hidden && (S.conn==='connected'||simTimer)) keepAwake(); });
 
 /* ---------- Dauerhafter Speicher ---------- */

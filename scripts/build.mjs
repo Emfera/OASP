@@ -62,7 +62,7 @@ const card = m => `<article class="${esc(m.status)}">
   ${m.next ? `<p><b>Nächster Schritt:</b> ${esc(m.next)}</p>` : ''}
   <p class="meta">${esc(m.track || '')} · begonnen ${esc(m.started)}${m.decided ? ' · entschieden ' + esc(m.decided) : ''}</p>
   ${m.hasPage && m.status !== 'verworfen' ? `<a class="open" href="experiments/${esc(m.slug)}/">Öffnen</a>` : ''}
-  <a href="https://github.com/Emfera/oasp/tree/main/experiments/${esc(m.slug)}">Quelle und Protokoll</a>
+  <a href="https://github.com/Emfera/OASP/tree/main/experiments/${esc(m.slug)}">Quelle und Protokoll</a>
 </article>`;
 
 await writeFile(join(OUT, 'index.html'), `<!doctype html><html lang="de"><head><meta charset="utf-8">

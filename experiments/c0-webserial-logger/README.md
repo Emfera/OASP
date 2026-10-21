@@ -18,7 +18,7 @@ Die Koordinaten in der Liste werden mit der GSI-Einheit gelesen (mm, 0,1 mm, 0,0
 ## Voraussetzungen
 
 - **Browser:** Chrome oder Edge. Auf Android ist Chrome 138 oder neuer nötig. iPhone und iPad können Web Serial nicht nutzen.
-- **HTTPS:** Die Seite muss über HTTPS laufen. Veröffentlichte Fassung: https://emfera.github.io/oasp/experiments/c0-webserial-logger/ – die Versionsnummer steht neben dem Titel. Am Notebook geht auch `http://localhost`:
+- **HTTPS:** Die Seite muss über HTTPS laufen. Veröffentlichte Fassung: https://emfera.github.io/OASP/experiments/c0-webserial-logger/ – die Versionsnummer steht neben dem Titel. Am Notebook geht auch `http://localhost`:
   ```
   python -m http.server 8000
   ```

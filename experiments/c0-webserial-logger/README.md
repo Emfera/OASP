@@ -52,6 +52,7 @@ Auf zwei Geräten durchführen: einem Android-Handy und einem Windows-Notebook b
 | 9 | Auf insgesamt 200 Punkte bringen, dabei mindestens 5 Abbrüche | – |
 | 10 | „Speicher prüfen“ | „kein Datenverlust, beide Speicher stimmen überein“ |
 | 11 | „Export (ZIP)“ | ZIP mit vier Dateien; `raw.gsi` öffnet in v0.81 |
+| 12 | Ausgabe schon **vor** der Stationierung auf „Schnittstelle“ stellen, dann stationieren | Notieren, ob Zeilen mit Stationsdaten ankommen (GSI-Wörter 84–88; die Liste zeigt sie als „keine Messung“) |
 
 Bitte ZIP und Notizen zu den Schritten 6 und 7 zurückschicken. Sie entscheiden über die Regeln für C1: Darf während einer Trennung gemessen werden? Braucht Android einen Hinweis „Bildschirm anlassen“?
 

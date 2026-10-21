@@ -71,3 +71,8 @@ Stand 21.10.2026: 11 von 11 Prüfungen bestanden, jeweils mit und ohne Worker; z
 - Was der TS07 sendet, solange keine Verbindung besteht, kann keine Software empfangen. Ob das Instrument dabei einen Fehler meldet, klärt Schritt 6.
 - Browserspeicher hängt am Browserprofil. „Websitedaten löschen“ löscht auch die Messungen. Deshalb nach jedem Feldtag exportieren.
 - „Speicher nicht dauerhaft“ in der Kopfzeile bedeutet: Der Browser darf bei Platzmangel löschen. Chrome gewährt dauerhaften Speicher meist erst, wenn die Seite installiert ist oder öfter genutzt wurde.
+
+## Für spätere Versionen vorgemerkt
+
+- **Start ohne Netz:** C0 muss online geladen werden. C1 bekommt einen Offline-Speicher der App (Service Worker), damit sie auch ohne Empfang startet.
+- **Exportziel wählen:** Auf Android über das Teilen-Menü (Drive, Mail, Ordner), am Computer mit „Speichern unter“, sonst normaler Download. Bis dahin: In Chrome unter Einstellungen → Downloads „Speicherort für Downloads erfragen“ einschalten.

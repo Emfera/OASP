@@ -1,0 +1,8 @@
+node_modules/
+_site/
+.DS_Store
+# Felddaten gehören nicht in ein öffentliches Repo (Fundstellenkoordinaten!)
+*.zip
+*.gsi
+**/felddaten/
+**/results/

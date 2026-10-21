@@ -1,0 +1,20 @@
+{
+  "name": "oasp",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Open Archaeological Surveying Pipeline – Experimente und spätere Pakete",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node scripts/test.mjs",
+    "check": "node scripts/build.mjs && node scripts/test.mjs",
+    "neu": "node scripts/new-experiment.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "playwright": "1.56.0"
+  }
+}

@@ -1,0 +1,570 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<title>tachylog C0 – Machbarkeitstest</title>
+<style>
+:root{
+  --bg:#0f172a;--panel:#1e293b;--line:#334155;--text:#f1f5f9;--muted:#94a3b8;
+  --ok:#22c55e;--ok-bg:#14532d;--warn:#f59e0b;--warn-bg:#78350f;--bad:#ef4444;--bad-bg:#7f1d1d;
+  --acc:#38bdf8;--btn:#e2e8f0;--btn-text:#0f172a;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){--bg:#f8fafc;--panel:#ffffff;--line:#cbd5e1;--text:#0f172a;--muted:#475569;--ok-bg:#dcfce7;--warn-bg:#fef3c7;--bad-bg:#fee2e2;--btn:#0f172a;--btn-text:#f8fafc;--ok:#15803d;--warn:#b45309;--bad:#b91c1c;--acc:#0369a1}
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:860px;margin:0 auto;padding:12px 16px 40px}
+h1{font-size:18px;margin:4px 0 2px}
+.sub{color:var(--muted);font-size:13px;margin-bottom:12px}
+.status{border-radius:14px;padding:16px;margin:8px 0 12px;border:2px solid var(--line);background:var(--panel)}
+.status b{font-size:26px;display:block}
+.status.ok{background:var(--ok-bg);border-color:var(--ok)}
+.status.warn{background:var(--warn-bg);border-color:var(--warn)}
+.status.bad{background:var(--bad-bg);border-color:var(--bad);animation:blink 1s steps(2) infinite}
+@keyframes blink{50%{border-color:transparent}}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:8px 0 12px}
+.metric{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.metric b{font-size:22px;display:block;font-variant-numeric:tabular-nums}
+.metric span{font-size:12px;color:var(--muted)}
+.btns{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
+button{font:inherit;font-weight:600;border:0;border-radius:10px;padding:14px 16px;min-height:52px;background:var(--btn);color:var(--btn-text);cursor:pointer}
+button.sec{background:transparent;color:var(--text);border:2px solid var(--line)}
+button.danger{background:var(--bad);color:#fff}
+button:disabled{opacity:.4;cursor:default}
+section{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin:12px 0}
+section h2{font-size:15px;margin:0 0 8px}
+label{display:inline-flex;align-items:center;gap:6px;margin:4px 12px 4px 0;font-size:14px}
+input,select{font:inherit;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text)}
+table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:6px 4px;border-bottom:1px solid var(--line);white-space:nowrap}
+td.num{text-align:right}
+.tablewrap{overflow-x:auto}
+.log{font:12px/1.45 ui-monospace,Menlo,Consolas,monospace;max-height:260px;overflow:auto;white-space:pre-wrap}
+.log .bad{color:var(--bad)} .log .warn{color:var(--warn)} .log .ok{color:var(--ok)}
+.chip{display:inline-block;font-size:12px;padding:2px 8px;border-radius:99px;border:1px solid var(--line);margin:2px 4px 2px 0;color:var(--muted)}
+.chip.ok{color:var(--ok);border-color:var(--ok)} .chip.bad{color:var(--bad);border-color:var(--bad)}
+.note{font-size:13px;color:var(--muted)}
+#report{white-space:pre-wrap;font:13px/1.45 ui-monospace,Menlo,Consolas,monospace}
+@media (max-width:560px){.grid{grid-template-columns:repeat(2,1fr)} button{flex:1 1 45%}}
+</style>
+</head>
+<body>
+<main>
+  <h1>tachylog C0 · Machbarkeitstest <span id="ver" class="chip"></span></h1>
+  <div class="sub">Web Serial → doppelte Speicherung (OPFS + IndexedDB) → Anzeige. Keine Auswertung.</div>
+  <div id="chips"></div>
+
+  <div id="status" class="status"><b id="statusText">Nicht verbunden</b><span id="statusSub" class="note">Sitzung wird geladen …</span></div>
+
+  <div class="grid">
+    <div class="metric"><b id="mLines">0</b><span>Zeilen gesichert</span></div>
+    <div class="metric"><b id="mMeas">0</b><span>davon Messungen</span></div>
+    <div class="metric"><b id="mFrag">0</b><span>Fragmente</span></div>
+    <div class="metric"><b id="mDisc">0</b><span>Abbrüche</span></div>
+  </div>
+
+  <div class="btns">
+    <button id="btnConnect">Mit TS07 verbinden</button>
+    <button id="btnDisconnect" class="sec" disabled>Trennen</button>
+  </div>
+
+  <section>
+    <h2>Letzte Zeilen</h2>
+    <div class="tablewrap"><table>
+      <thead><tr><th>#</th><th>PID</th><th>Hinweis</th><th class="num">E</th><th class="num">N</th><th class="num">H</th><th>Zeit</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>Sitzung</h2>
+    <div class="note" id="sessionInfo"></div>
+    <div class="btns">
+      <button id="btnVerify" class="sec">Speicher prüfen</button>
+      <button id="btnExport" class="sec">Export (ZIP)</button>
+      <button id="btnNew" class="sec">Neue Sitzung</button>
+    </div>
+    <div id="report"></div>
+  </section>
+
+  <section>
+    <h2>Simulator (ohne Instrument)</h2>
+    <div class="note">Erzeugt GSI16-Zeilen und läuft durch denselben Speicherweg wie echte Daten.</div>
+    <label>Intervall <input id="simMs" type="number" value="1000" min="50" step="50" style="width:90px"> ms</label>
+    <div class="btns">
+      <button id="btnSim" class="sec">Simulator starten</button>
+      <button id="btnSimCut" class="sec" disabled>Abbruch mitten in Zeile</button>
+      <button id="btnSimBurst" class="sec" disabled>20 Zeilen auf einmal</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Einstellungen</h2>
+    <label>Baudrate <select id="baud"><option>9600</option><option>19200</option><option>38400</option><option>57600</option><option selected>115200</option></select></label>
+    <label><input id="optBeep" type="checkbox" checked> Ton</label>
+    <label><input id="optVibe" type="checkbox" checked> Vibration</label>
+    <label><input id="optReconnect" type="checkbox" checked> Automatisch neu verbinden</label>
+    <div class="note">Bei Bluetooth (RFCOMM) spielt die Baudrate keine Rolle; bei Kabel muss sie zum TS07 passen.</div>
+  </section>
+
+  <section>
+    <h2>Ereignisprotokoll</h2>
+    <div id="log" class="log"></div>
+  </section>
+</main>
+
+<script>
+'use strict';
+/* ---------------------------------------------------------------
+   tachylog C0 – Machbarkeitstest
+   Ziel: Nachweis, dass jede empfangene Zeile dauerhaft gesichert ist,
+   bevor sie angezeigt wird, und dass Abbrüche/Neuladen nichts verlieren.
+   Ablage je Sitzung:
+     OPFS  sessions/<sid>/raw.jsonl  alle Zeilen + Fragmente, Hash-Kette
+     OPFS  sessions/<sid>/raw.gsi    vollständige Zeilen, Byte für Byte inkl. Zeilenende
+     IDB   tachylog-c0               dieselben Einträge (durability: strict) + Ereignisse
+   Schreibreihenfolge im Worker: erst raw.jsonl, dann raw.gsi (Reparatur möglich).
+---------------------------------------------------------------- */
+const APP_VERSION = '__OASP_VERSION__';   // wird beim Veröffentlichen ersetzt (Commit + Datum)
+const VERSION = APP_VERSION.startsWith('__') ? 'lokal' : APP_VERSION;
+const $ = id => document.getElementById(id);
+const SPP = '00001101-0000-1000-8000-00805f9b34fb';
+const enc = new TextEncoder();
+const latin1 = bytes => { let s=''; for (let i=0;i<bytes.length;i++) s+=String.fromCharCode(bytes[i]); return s; };
+const unlatin1 = s => { const b=new Uint8Array(s.length); for (let i=0;i<s.length;i++) b[i]=s.charCodeAt(i)&255; return b; };
+const nowIso = () => new Date().toISOString();
+const hex = buf => [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
+async function sha256(str){ return hex(await crypto.subtle.digest('SHA-256', enc.encode(str))); }
+
+/* ---------- OPFS-Worker (SyncAccessHandle + flush) ---------- */
+const workerSrc = `
+let gsi=null, jsonl=null, cur=null;
+async function openSession(sid){
+  if(cur===sid && gsi && jsonl) return;
+  closeAll();
+  const root = await navigator.storage.getDirectory();
+  const sessions = await root.getDirectoryHandle('sessions',{create:true});
+  const dir = await sessions.getDirectoryHandle(sid,{create:true});
+  jsonl = await (await dir.getFileHandle('raw.jsonl',{create:true})).createSyncAccessHandle();
+  gsi   = await (await dir.getFileHandle('raw.gsi',{create:true})).createSyncAccessHandle();
+  cur = sid;
+}
+function closeAll(){ try{gsi&&gsi.close()}catch(e){} try{jsonl&&jsonl.close()}catch(e){} gsi=jsonl=null; cur=null; }
+function h(name){ return name==='raw.gsi'?gsi:jsonl; }
+onmessage = async (e) => {
+  const {id, op, a} = e.data;
+  try{
+    let r=null, transfer=[];
+    if(op==='open'){ await openSession(a.sid); r={jsonl:jsonl.getSize(), gsi:gsi.getSize()}; }
+    else if(op==='append'){
+      if(a.jsonl){ jsonl.write(a.jsonl,{at:jsonl.getSize()}); jsonl.flush(); }
+      if(a.gsi){ gsi.write(a.gsi,{at:gsi.getSize()}); gsi.flush(); }
+      r={jsonl:jsonl.getSize(), gsi:gsi.getSize()};
+    }
+    else if(op==='read'){ const f=h(a.file); const buf=new Uint8Array(f.getSize()); f.read(buf,{at:0}); r=buf; transfer=[buf.buffer]; }
+    else if(op==='truncate'){ const f=h(a.file); f.truncate(a.size); f.flush(); r=f.getSize(); }
+    else if(op==='close'){ closeAll(); }
+    postMessage({id, ok:true, r}, transfer);
+  }catch(err){ postMessage({id, ok:false, error: String(err && err.message || err)}); }
+};`;
+/* Speicherwege: 1) Worker + SyncAccessHandle (bevorzugt), 2) OPFS im Hauptthread, 3) nur IndexedDB.
+   Eingebettete Vorschauen (z. B. Datei-Vorschau einer App) verbieten oft Worker oder OPFS. */
+let STORE_MODE='worker', storeNote='', worker=null, wid=0; const wpending=new Map();
+function startWorker(){
+  try{
+    if(new URLSearchParams(location.search).has('noworker')) throw new Error('per Testschalter abgeschaltet');
+    worker=new Worker(URL.createObjectURL(new Blob([workerSrc],{type:'text/javascript'})));
+    worker.onmessage = e => { const p=wpending.get(e.data.id); if(!p) return; wpending.delete(e.data.id); e.data.ok?p.res(e.data.r):p.rej(new Error(e.data.error)); };
+    worker.onerror = e => { if(e.preventDefault) e.preventDefault(); for(const p of wpending.values()) p.rej(new Error('Worker-Fehler '+(e.message||''))); wpending.clear(); };
+  }catch(e){ STORE_MODE='main'; storeNote='Worker nicht erlaubt: '+e.message; }
+}
+const mainFS = { fh:{},
+  async open(a){ if(new URLSearchParams(location.search).has('noopfs')) throw new Error('per Testschalter abgeschaltet');
+    const root=await navigator.storage.getDirectory(); const ss=await root.getDirectoryHandle('sessions',{create:true}); const d=await ss.getDirectoryHandle(a.sid,{create:true});
+    this.fh={'raw.jsonl':await d.getFileHandle('raw.jsonl',{create:true}), 'raw.gsi':await d.getFileHandle('raw.gsi',{create:true})}; return {}; },
+  async add(n,b){ const sz=(await this.fh[n].getFile()).size; const w=await this.fh[n].createWritable({keepExistingData:true}); await w.seek(sz); await w.write(b); await w.close(); },
+  async append(a){ if(a.jsonl) await this.add('raw.jsonl',a.jsonl); if(a.gsi) await this.add('raw.gsi',a.gsi); return {}; },
+  async read(a){ return new Uint8Array(await (await this.fh[a.file].getFile()).arrayBuffer()); },
+  async truncate(a){ const w=await this.fh[a.file].createWritable({keepExistingData:true}); await w.truncate(a.size); await w.close(); return a.size; },
+  async close(){ this.fh={}; }
+};
+function W(op, a={}, transfer=[]){
+  if(STORE_MODE==='main') return mainFS[op](a);
+  if(STORE_MODE==='idb') return Promise.resolve(op==='read'?new Uint8Array(0):{});
+  return new Promise((res,rej)=>{ const id=++wid; wpending.set(id,{res,rej}); worker.postMessage({id,op,a},transfer); });
+}
+async function initStorage(sid){
+  if(STORE_MODE==='worker' && !worker) startWorker();
+  for(;;){
+    try{ await W('open',{sid}); break; }
+    catch(e){
+      if(STORE_MODE==='worker'){ STORE_MODE='main'; storeNote='Worker: '+e.message; continue; }
+      if(STORE_MODE==='main'){ STORE_MODE='idb'; storeNote='Dateisystem (OPFS) nicht verfügbar: '+e.message; continue; }
+      throw e;
+    }
+  }
+  if(STORE_MODE!=='worker' && !initStorage.logged){ initStorage.logged=true; log(STORE_MODE==='idb'?'Nur eine Sicherung (IndexedDB)':'OPFS ohne Worker', storeNote, STORE_MODE==='idb'?'bad':'warn'); }
+  chips();
+}
+
+/* ---------- IndexedDB ---------- */
+let db;
+function idbOpen(){ return new Promise((res,rej)=>{ const r=indexedDB.open('tachylog-c0',1);
+  r.onupgradeneeded=()=>{ const d=r.result;
+    d.createObjectStore('sessions',{keyPath:'sid'});
+    d.createObjectStore('lines',{keyPath:['sid','seq']});
+    const ev=d.createObjectStore('events',{keyPath:'n',autoIncrement:true}); ev.createIndex('sid','sid'); };
+  r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
+function tx(stores, mode, fn){ return new Promise((res,rej)=>{ const t=db.transaction(stores, mode, {durability:'strict'}); let out; Promise.resolve(fn(t)).then(v=>out=v); t.oncomplete=()=>res(out); t.onerror=()=>rej(t.error); t.onabort=()=>rej(t.error||new Error('abort')); }); }
+const reqP = r => new Promise((res,rej)=>{ r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); });
+async function idbLines(sid){ return tx(['lines'],'readonly', t=>reqP(t.objectStore('lines').getAll(IDBKeyRange.bound([sid,0],[sid,Infinity])))); }
+
+/* ---------- Zustand ---------- */
+const S = { sid:null, seq:0, prev:'0'.repeat(64), lines:0, meas:0, frag:0, disc:0, recent:[], conn:'idle', lastPid:null };
+let port=null, reader=null, keepReading=false, userDisconnect=false, reconnectTimer=null, wakeLock=null;
+let rx = new Uint8Array(0);           // Empfangspuffer (noch ohne Zeilenende)
+let chain = Promise.resolve();        // serialisiert alle Sicherungen
+
+/* ---------- Protokoll ---------- */
+function log(type, detail, cls=''){
+  const t=nowIso(); const el=document.createElement('div'); if(cls) el.className=cls;
+  el.textContent=`${t.slice(11,19)}  ${type}${detail?' – '+detail:''}`; $('log').prepend(el);
+  if(db && S.sid) tx(['events'],'readwrite', t2=>t2.objectStore('events').add({sid:S.sid,t,type,detail:detail||''})).catch(()=>{});
+}
+
+/* ---------- GSI-Anzeige (einheitenbewusst) ---------- */
+const UNIT_DIV = {'0':1e3,'1':1e3,'6':1e4,'7':1e4,'8':1e5};
+function parseGSI(text){
+  const words = text.replace(/^\*/,'').trim().split(/\s+/);
+  const out={pid:null,E:null,N:null,H:null,polar:false,unitWarn:null};
+  for(const w0 of words){ const w=w0.replace(/^\*/,''); if(w.length<8) continue;
+    const wi=w.slice(0,2), unit=w[5], m=w.slice(6).match(/^([+-])(.+)$/); if(!m) continue;
+    const data=m[2];
+    if(wi==='11'){ out.pid=data.length>10?data.slice(-10):data; continue; }
+    if(wi==='21'||wi==='22'||wi==='31') out.polar=true;
+    if(wi==='81'||wi==='82'||wi==='83'){ const div=UNIT_DIV[unit]; if(!div){ out.unitWarn='Einheit '+unit; continue; }
+      const v=(m[1]==='-'?-1:1)*Number(data)/div; if(wi==='81')out.E=v; if(wi==='82')out.N=v; if(wi==='83')out.H=v; if(unit==='1'||unit==='7') out.unitWarn='Fuß'; }
+  }
+  return out;
+}
+
+/* ---------- Empfang: Bytes → Zeilen ---------- */
+function onBytes(chunk){
+  const b=new Uint8Array(rx.length+chunk.length); b.set(rx); b.set(chunk,rx.length); rx=b;
+  let start=0;
+  for(let i=0;i<rx.length;i++){
+    const c=rx[i];
+    if(c===0x0A){ commit(rx.slice(start,i+1),'line'); start=i+1; }
+    else if(c===0x0D){ if(i+1<rx.length){ if(rx[i+1]!==0x0A){ commit(rx.slice(start,i+1),'line'); start=i+1; } } else break; }
+  }
+  rx=rx.slice(start);
+}
+function flushFragment(reason){
+  if(!rx.length) return;
+  const frag=rx; rx=new Uint8Array(0);
+  commit(frag,'fragment'); log('Fragment gesichert', `${frag.length} Bytes ohne Zeilenende (${reason})`,'warn');
+}
+
+/* ---------- Sicherung: erst beide Speicher, dann Anzeige ---------- */
+function commit(bytes, kind){
+  chain = chain.then(()=>doCommit(bytes,kind)).catch(err=>{ storageAlarm(err); });
+}
+async function doCommit(bytes, kind){
+  const raw=latin1(bytes);
+  const body = raw.replace(/[\r\n]+$/,'');
+  if(kind==='line' && !body.trim()) kind='empty';
+  const seq=S.seq+1, t=nowIso();
+  const entry={sid:S.sid, seq, t, kind, raw, prev:S.prev};
+  entry.hash = await sha256(JSON.stringify([entry.seq,entry.t,entry.kind,entry.raw,entry.prev]));
+  const jline = enc.encode(JSON.stringify({seq,t,kind,raw,prev:entry.prev,hash:entry.hash})+'\n');
+  const gsiBytes = (kind==='line'||kind==='empty') ? bytes : null;
+  await Promise.all([
+    W('append',{jsonl:jline, gsi:gsiBytes}),
+    tx(['lines','sessions'],'readwrite', t2=>{ t2.objectStore('lines').put(entry); t2.objectStore('sessions').put({...sessionMeta, lastSeq:seq, lastHash:entry.hash, updated:t}); })
+  ]);
+  S.seq=seq; S.prev=entry.hash; S.lines++;
+  if(kind==='fragment') S.frag++;
+  shown(entry, body);
+}
+function storageAlarm(err){
+  setStatus('bad','SPEICHERFEHLER', String(err&&err.message||err)+' – Messung am Instrument wiederholen, Export sichern!');
+  log('Speicherfehler', String(err&&err.message||err),'bad'); alarm(true);
+}
+
+/* ---------- Anzeige ---------- */
+let sessionMeta={};
+function shown(entry, body){
+  let p={pid:null,E:null,N:null,H:null}; let note='';
+  if(entry.kind==='line'){ p=parseGSI(body);
+    if(p.E!=null){ S.meas++; } else if(p.polar){ note='nur Polarwerte (Maske ohne 81/82/83)'; } else note='keine Messung';
+    if(p.unitWarn) note=(note?note+'; ':'')+p.unitWarn;
+    if(p.pid && S.lastPid){ const a=S.lastPid.match(/(\d+)$/), b=p.pid.match(/(\d+)$/);
+      if(a&&b){ const d=Number(b[1])-Number(a[1]); if(p.pid===S.lastPid) note=(note?note+'; ':'')+'PID doppelt'; else if(d>1&&d<1000) note=(note?note+'; ':'')+`Lücke: ${d-1} PID fehlt`; } }
+    if(p.pid) S.lastPid=p.pid;
+    beep(); }
+  if(entry.kind==='fragment') note='Fragment (Abbruch)';
+  if(entry.kind==='empty') note='Leerzeile';
+  S.recent.unshift({seq:entry.seq,t:entry.t,pid:p.pid,E:p.E,N:p.N,H:p.H,note}); S.recent.length=Math.min(S.recent.length,15);
+  render();
+}
+const f3=v=>v==null?'':v.toFixed(3);
+function render(){
+  $('mLines').textContent=S.lines; $('mMeas').textContent=S.meas; $('mFrag').textContent=S.frag; $('mDisc').textContent=S.disc;
+  $('rows').innerHTML=S.recent.map(r=>`<tr><td>${r.seq}</td><td>${esc(r.pid||'')}</td><td>${esc(r.note)}</td><td class="num">${f3(r.E)}</td><td class="num">${f3(r.N)}</td><td class="num">${f3(r.H)}</td><td>${new Date(r.t).toLocaleTimeString('de-AT')}</td></tr>`).join('');
+  $('sessionInfo').textContent=`Sitzung ${S.sid||'–'} · ${S.lines} Zeilen · letzte Prüfsumme ${S.prev.slice(0,12)}…`;
+}
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function setStatus(cls, text, sub){ const el=$('status'); el.className='status '+cls; $('statusText').textContent=text; $('statusSub').textContent=sub||''; }
+
+/* ---------- Ton, Vibration, Wake Lock ---------- */
+let actx=null;
+function tone(freq, ms){ if(!$('optBeep').checked) return; try{ actx=actx||new AudioContext(); const o=actx.createOscillator(), g=actx.createGain(); o.frequency.value=freq; g.gain.value=.15; o.connect(g); g.connect(actx.destination); o.start(); o.stop(actx.currentTime+ms/1000); }catch(e){} }
+function beep(){ tone(1320,60); if($('optVibe').checked&&navigator.vibrate) navigator.vibrate(40); }
+function alarm(strong){ tone(440,400); setTimeout(()=>tone(440,400),550); if(strong) setTimeout(()=>tone(440,400),1100); if($('optVibe').checked&&navigator.vibrate) navigator.vibrate([300,120,300,120,300]); }
+async function keepAwake(){ try{ if('wakeLock' in navigator && !wakeLock){ wakeLock=await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release',()=>{wakeLock=null;}); } }catch(e){ log('Wake Lock nicht möglich', e.message,'warn'); } }
+document.addEventListener('visibilitychange',()=>{ log(document.hidden?'Seite verborgen':'Seite sichtbar', document.hidden?'Browser kann Empfang drosseln':'', document.hidden?'warn':''); if(!document.hidden && (S.conn==='connected'||simTimer)) keepAwake(); });
+
+/* ---------- Dauerhafter Speicher ---------- */
+async function askPersist(){
+  let persisted=false; try{ persisted = await navigator.storage.persisted() || await navigator.storage.persist(); }catch(e){}
+  let est=''; try{ const e=await navigator.storage.estimate(); est=` · ${(e.usage/1e6).toFixed(1)} MB von ${(e.quota/1e9).toFixed(1)} GB`; }catch(e){}
+  chips({persist:persisted, est}); if(!persisted) log('Speicher nicht dauerhaft','Browser darf Daten bei Platzmangel löschen – täglich exportieren','warn');
+  return persisted;
+}
+let lastChipX={};
+function chips(x=lastChipX){ lastChipX=x;
+  const c=[]; const ser='serial' in navigator && serialAllowed();
+  c.push(`<span class="chip ${ser?'ok':'bad'}">Web Serial ${ser?'verfügbar':'fehlt'}</span>`);
+  c.push(`<span class="chip ${window.isSecureContext?'ok':'bad'}">${window.isSecureContext?'sicherer Kontext':'kein HTTPS'}</span>`);
+  c.push(STORE_MODE==='idb'?'<span class="chip bad">Sicherung: nur IndexedDB</span>':`<span class="chip ok">Sicherung: OPFS + IndexedDB${STORE_MODE==='main'?' (ohne Worker)':''}</span>`);
+  if('persist' in x) c.push(`<span class="chip ${x.persist?'ok':'bad'}">Speicher ${x.persist?'dauerhaft':'nicht dauerhaft'}${x.est||''}</span>`);
+  $('chips').innerHTML=c.join('');
+}
+
+/* ---------- Web Serial ---------- */
+function serialAllowed(){ try{ return !document.featurePolicy || document.featurePolicy.allowsFeature('serial'); }catch(e){ return true; } }
+async function connect(){
+  if(('serial' in navigator) && !serialAllowed()){ alert('Diese Vorschau erlaubt keinen Zugriff auf serielle Schnittstellen. Die Seite direkt in Chrome über HTTPS öffnen (z. B. GitHub Pages). Der Simulator funktioniert hier trotzdem.'); return; }
+  if(!('serial' in navigator)){ alert('Web Serial ist in diesem Browser nicht verfügbar. Chrome oder Edge verwenden (Android: Chrome 138+).'); return; }
+  await askPersist();
+  try{ port = await navigator.serial.requestPort({allowedBluetoothServiceClassIds:[SPP]}); }
+  catch(e){ if(e.name==='SecurityError'){ log('Zugriff verweigert', 'In dieser Umgebung nicht erlaubt – Seite direkt in Chrome über HTTPS öffnen','bad'); alert('Zugriff auf Bluetooth/seriell ist hier nicht erlaubt. Seite direkt in Chrome über HTTPS öffnen.'); } else log('Keine Schnittstelle gewählt', e.message); return; }
+  userDisconnect=false; await openAndRead();
+}
+async function openAndRead(){
+  clearTimeout(reconnectTimer);
+  setStatus('warn','Verbinde …','');
+  try{ await port.open({baudRate:Number($('baud').value), dataBits:8, stopBits:1, parity:'none', bufferSize:8192}); }
+  catch(e){ if(!/already open/i.test(e.message)){ log('Verbindung fehlgeschlagen', e.message,'bad'); setStatus('bad','NICHT VERBUNDEN','Neuer Versuch läuft … Nicht messen!'); scheduleReconnect(); return; } }
+  const info = port.getInfo ? port.getInfo() : {};
+  S.conn='connected'; keepAwake(); $('btnDisconnect').disabled=false; $('btnConnect').disabled=true;
+  setStatus('ok','Verbunden – bereit', 'Messung am TS07 auslösen. Jede Zeile wird vor der Anzeige doppelt gesichert.');
+  log('Verbunden', info.bluetoothServiceClassId?'Bluetooth RFCOMM':(info.usbVendorId?'USB':'seriell'),'ok');
+  keepReading=true;
+  while(port.readable && keepReading){
+    reader = port.readable.getReader();
+    try{ for(;;){ const {value,done}=await reader.read(); if(done) break; if(value&&value.length) onBytes(value); } }
+    catch(e){ log('Lesefehler', e.message,'bad'); break; }
+    finally{ try{reader.releaseLock();}catch(e){} reader=null; }
+  }
+  await lost();
+}
+async function lost(){
+  flushFragment(userDisconnect?'Trennen':'Verbindungsabbruch');
+  try{ await port.close(); }catch(e){}
+  S.conn='idle'; $('btnConnect').disabled=false;
+  if(userDisconnect){ setStatus('', 'Getrennt', 'Verbindung vom Benutzer beendet.'); $('btnDisconnect').disabled=true; log('Getrennt'); return; }
+  S.disc++; render(); log('VERBINDUNG ABGEBROCHEN','','bad');
+  setStatus('bad','VERBINDUNG ABGEBROCHEN','Nicht messen! Am TS07 gesendete Punkte gehen sonst verloren.'); alarm(true);
+  scheduleReconnect();
+}
+function scheduleReconnect(){
+  if(userDisconnect || !$('optReconnect').checked || !port) return;
+  $('btnDisconnect').disabled=false;
+  reconnectTimer=setTimeout(()=>{ log('Neuer Verbindungsversuch'); openAndRead(); }, 2500);
+}
+async function disconnect(){
+  userDisconnect=true; keepReading=false; clearTimeout(reconnectTimer);
+  if(reader){ try{ await reader.cancel(); }catch(e){} } else { await lost(); }
+  stopSim();
+}
+if('serial' in navigator){
+  navigator.serial.addEventListener('disconnect', e=>{ if(e.target===port) log('Gerät meldet Trennung','', 'warn'); });
+  navigator.serial.addEventListener('connect', e=>{ if(e.target===port && S.conn!=='connected' && !userDisconnect){ log('Gerät wieder erreichbar'); clearTimeout(reconnectTimer); openAndRead(); } });
+}
+
+/* ---------- Simulator ---------- */
+let simTimer=null, simN=0, simE=81511.538, simN_=238504.567, simH=571.144;
+function pad16(s){ return s.padStart(16,'0'); }
+function num16(v, div=1000){ const n=Math.round(Math.abs(v)*div); return (v<0?'-':'+')+String(n).padStart(16,'0'); }
+function simLine(){
+  simN++; simE+=Math.random()-.5; simN_+=Math.random()-.5; simH+=(Math.random()-.5)*.05;
+  const pid='0012A02'+String(simN%1000).padStart(3,'0');
+  return `*11${String(simN%10000).padStart(4,'0')}+${pad16(pid)} 81..00${num16(simE)} 82..00${num16(simN_)} 83..00${num16(simH)} \r\n`;
+}
+function startSim(){
+  if(simTimer) return stopSim();
+  askPersist(); keepAwake(); S.conn='sim';
+  setStatus('ok','Simulator läuft','Zeilen laufen durch denselben Speicherweg wie echte Daten.');
+  log('Simulator gestartet','', 'ok');
+  simTimer=setInterval(()=>onBytes(enc.encode(simLine())), Math.max(50,Number($('simMs').value)||1000));
+  $('btnSim').textContent='Simulator stoppen'; $('btnSimCut').disabled=false; $('btnSimBurst').disabled=false;
+}
+function stopSim(){ if(!simTimer) return; clearInterval(simTimer); simTimer=null; flushFragment('Simulator gestoppt'); S.conn='idle'; $('btnSim').textContent='Simulator starten'; $('btnSimCut').disabled=true; $('btnSimBurst').disabled=true; setStatus('','Simulator gestoppt',''); log('Simulator gestoppt'); }
+function simCut(){
+  if(!simTimer) return; clearInterval(simTimer); simTimer=null;
+  const l=enc.encode(simLine()); onBytes(l.slice(0, Math.floor(l.length/2)));
+  S.disc++; render(); flushFragment('simulierter Abbruch'); log('SIMULIERTER ABBRUCH','', 'bad');
+  setStatus('bad','VERBINDUNG ABGEBROCHEN (Simulation)','Neuverbindung in 3 s …'); alarm(false);
+  setTimeout(()=>{ log('Simulator: neu verbunden','', 'ok'); simTimer=null; $('btnSim').textContent='Simulator starten'; startSim(); }, 3000);
+}
+function simBurst(){ let s=''; for(let i=0;i<20;i++) s+=simLine(); const b=enc.encode(s); onBytes(b.slice(0,777)); onBytes(b.slice(777)); }
+
+/* ---------- Sitzung: anlegen, fortsetzen, reparieren ---------- */
+async function newSession(ask=true){
+  if(ask && S.lines && !confirm('Neue Sitzung beginnen? Die aktuelle bleibt gespeichert und kann exportiert werden.')) return;
+  if(S.sid) await tx(['sessions'],'readwrite', t=>t.objectStore('sessions').put({...sessionMeta, status:'closed', lastSeq:S.seq, lastHash:S.prev, updated:nowIso()}));
+  const d=new Date(), z=n=>String(n).padStart(2,'0'); const sid=`${d.getFullYear()}${z(d.getMonth()+1)}${z(d.getDate())}_${z(d.getHours())}${z(d.getMinutes())}${z(d.getSeconds())}`;
+  sessionMeta={sid, created:nowIso(), status:'open', app:'tachylog-c0', version:VERSION, ua:navigator.userAgent};
+  Object.assign(S,{sid, seq:0, prev:'0'.repeat(64), lines:0, meas:0, frag:0, disc:0, recent:[], lastPid:null});
+  await initStorage(sid);
+  await tx(['sessions'],'readwrite', t=>t.objectStore('sessions').put({...sessionMeta, lastSeq:0, lastHash:S.prev, updated:nowIso()}));
+  log('Neue Sitzung', sid,'ok'); render();
+}
+function parseJsonl(bytes){
+  const text=new TextDecoder().decode(bytes); const out=[]; let good=0; let pos=0;
+  for(const ln of text.split('\n')){ const lineBytes=enc.encode(ln).length+1;
+    if(pos+lineBytes>bytes.length){ break; } // letzte Zeile ohne \n = unvollständig
+    try{ out.push(JSON.parse(ln)); good=pos+lineBytes; }catch(e){ break; }
+    pos+=lineBytes; }
+  return {entries:out, goodBytes:good};
+}
+async function resumeOrCreate(){
+  const sessions = await tx(['sessions'],'readonly', t=>reqP(t.objectStore('sessions').getAll()));
+  const open = sessions.filter(s=>s.status==='open').sort((a,b)=>a.sid<b.sid?1:-1)[0];
+  if(!open) return newSession(false);
+  sessionMeta={sid:open.sid, created:open.created, status:'open', app:open.app, ua:open.ua};
+  S.sid=open.sid; await initStorage(S.sid);
+  const rep = await reconcile(S.sid);
+  const lines = await idbLines(S.sid);
+  lines.sort((a,b)=>a.seq-b.seq);
+  S.seq=lines.length?lines.at(-1).seq:0; S.prev=lines.length?lines.at(-1).hash:'0'.repeat(64);
+  S.lines=lines.length; S.frag=lines.filter(l=>l.kind==='fragment').length; S.meas=0; S.recent=[];
+  for(const l of lines.slice(-15)){ /* nur Anzeige */ const body=l.raw.replace(/[\r\n]+$/,''); const p=l.kind==='line'?parseGSI(body):{}; S.recent.unshift({seq:l.seq,t:l.t,pid:p.pid||null,E:p.E??null,N:p.N??null,H:p.H??null,note:l.kind==='fragment'?'Fragment (Abbruch)':''}); }
+  S.meas=lines.filter(l=>l.kind==='line' && parseGSI(l.raw).E!=null).length;
+  const lp=[...lines].reverse().find(l=>l.kind==='line'); S.lastPid=lp?parseGSI(lp.raw).pid:null;
+  log('Sitzung fortgesetzt', `${S.sid} · ${S.lines} Zeilen${rep?' · '+rep:''}`,'ok');
+  render();
+}
+/* Gleicht OPFS und IndexedDB nach Absturz ab; ergänzt, was einer Seite fehlt. */
+async function reconcile(sid){
+  if(STORE_MODE==='idb') return '';
+  const notes=[];
+  const jb = await W('read',{file:'raw.jsonl'});
+  const {entries, goodBytes} = parseJsonl(jb);
+  if(goodBytes<jb.length){ await W('truncate',{file:'raw.jsonl', size:goodBytes}); notes.push(`raw.jsonl: ${jb.length-goodBytes} Bytes unvollständiger Schluss entfernt`); }
+  const idb = await idbLines(sid);
+  const bySeq=new Map(); idb.forEach(l=>bySeq.set(l.seq,l));
+  const opfsSeq=new Set(entries.map(e=>e.seq));
+  // OPFS hat mehr → in IDB nachtragen
+  const missingIdb = entries.filter(e=>!bySeq.has(e.seq));
+  if(missingIdb.length){ await tx(['lines'],'readwrite', t=>missingIdb.forEach(e=>t.objectStore('lines').put({sid,...e}))); notes.push(`${missingIdb.length} Zeile(n) in IndexedDB ergänzt`); missingIdb.forEach(e=>bySeq.set(e.seq,{sid,...e})); }
+  // IDB hat mehr → in OPFS nachtragen
+  const missingOpfs = idb.filter(l=>!opfsSeq.has(l.seq)).sort((a,b)=>a.seq-b.seq);
+  for(const l of missingOpfs){ await W('append',{jsonl:enc.encode(JSON.stringify({seq:l.seq,t:l.t,kind:l.kind,raw:l.raw,prev:l.prev,hash:l.hash})+'\n')}); }
+  if(missingOpfs.length) notes.push(`${missingOpfs.length} Zeile(n) in raw.jsonl ergänzt`);
+  // raw.gsi gegen Sollinhalt prüfen
+  const all=[...bySeq.values()].sort((a,b)=>a.seq-b.seq);
+  const gsiParts = all.filter(l=>l.kind==='line'||l.kind==='empty').map(l=>unlatin1(l.raw));
+  const want = gsiParts.reduce((n,b)=>n+b.length,0);
+  const gb = await W('read',{file:'raw.gsi'});
+  if(gb.length<want){
+    let pos=0, cut=0; for(const b of gsiParts){ if(pos+b.length<=gb.length){ pos+=b.length; cut=pos; } else break; }
+    if(cut<gb.length) await W('truncate',{file:'raw.gsi', size:cut});
+    let p2=0; for(const b of gsiParts){ if(p2>=cut) await W('append',{gsi:b}); p2+=b.length; }
+    notes.push(`raw.gsi um ${want-cut} Bytes ergänzt`);
+  } else if(gb.length>want){ notes.push(`raw.gsi enthält ${gb.length-want} Bytes mehr als erwartet – beim Export prüfen`); }
+  if(all.length){ const last=all.at(-1); await tx(['sessions'],'readwrite', t=>t.objectStore('sessions').put({...sessionMeta, lastSeq:last.seq, lastHash:last.hash, updated:nowIso()})); }
+  return notes.join('; ');
+}
+
+/* ---------- Prüfen ---------- */
+async function verify(sid=S.sid){
+  await chain;
+  const out=[]; let ok=true;
+  const idb=(await idbLines(sid)).sort((a,b)=>a.seq-b.seq);
+  let prev='0'.repeat(64), chainOk=true, gaps=0;
+  for(let i=0;i<idb.length;i++){ const l=idb[i]; if(l.seq!==i+1) gaps++;
+    const h=await sha256(JSON.stringify([l.seq,l.t,l.kind,l.raw,l.prev])); if(l.prev!==prev||h!==l.hash){ chainOk=false; } prev=l.hash; }
+  out.push(`IndexedDB: ${idb.length} Einträge, Hash-Kette ${chainOk?'in Ordnung':'GEBROCHEN'}${gaps?`, ${gaps} Nummernsprünge`:''}`); ok=ok&&chainOk&&!gaps;
+  const jb=await readFile(sid,'raw.jsonl'); const {entries,goodBytes}=parseJsonl(jb);
+  const same = entries.length===idb.length && entries.every((e,i)=>e.hash===idb[i].hash);
+  out.push(`OPFS raw.jsonl: ${entries.length} Einträge${goodBytes<jb.length?', unvollständiger Schluss':''}, ${same?'identisch mit IndexedDB':'WEICHT AB'}`); ok=ok&&same;
+  const gb=await readFile(sid,'raw.gsi'); const want=latin1(gb);
+  const exp=idb.filter(l=>l.kind==='line'||l.kind==='empty').map(l=>l.raw).join('');
+  out.push(`OPFS raw.gsi: ${gb.length} Bytes, ${want===exp?'Byte für Byte gleich den gesicherten Zeilen':'WEICHT AB'}`); ok=ok&&want===exp;
+  if(STORE_MODE==='idb'){ out.push('ACHTUNG: Dateisystem nicht verfügbar – nur eine Sicherung (IndexedDB). Für den Feldtest Seite direkt in Chrome öffnen.'); }
+  const fr=idb.filter(l=>l.kind==='fragment').length; out.push(`Fragmente: ${fr}`);
+  out.push(ok?'ERGEBNIS: kein Datenverlust, beide Speicher stimmen überein.':'ERGEBNIS: Abweichung – Export sichern und Protokoll senden.');
+  $('report').textContent=out.join('\n'); log('Speicherprüfung', ok?'in Ordnung':'Abweichung', ok?'ok':'bad');
+  return {ok, mode:STORE_MODE, idb:idb.length, opfs:entries.length, gsiBytes:gb.length, chainOk, same, gsiSame:want===exp, fragments:fr};
+}
+async function readFile(sid, name){
+  if(STORE_MODE==='idb'){ const L=(await idbLines(sid)).sort((a,b)=>a.seq-b.seq);
+    if(name==='raw.gsi') return unlatin1(L.filter(l=>l.kind==='line'||l.kind==='empty').map(l=>l.raw).join(''));
+    return enc.encode(L.map(l=>JSON.stringify({seq:l.seq,t:l.t,kind:l.kind,raw:l.raw,prev:l.prev,hash:l.hash})+'\n').join('')); }
+  if(sid===S.sid) return W('read',{file:name});
+  const root=await navigator.storage.getDirectory(); const dir=await (await root.getDirectoryHandle('sessions')).getDirectoryHandle(sid);
+  return new Uint8Array(await (await (await dir.getFileHandle(name)).getFile()).arrayBuffer());
+}
+
+/* ---------- Export: ZIP (ohne Kompression) ---------- */
+const CRC=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0;}return t;})();
+const crc32=b=>{let c=0xFFFFFFFF;for(let i=0;i<b.length;i++)c=CRC[(c^b[i])&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0;};
+function zip(files){
+  const parts=[], central=[]; let off=0;
+  for(const f of files){ const name=enc.encode(f.name), d=f.data, crc=crc32(d);
+    const h=new DataView(new ArrayBuffer(30)); h.setUint32(0,0x04034b50,true); h.setUint16(4,20,true); h.setUint16(6,0x0800,true); h.setUint16(8,0,true); h.setUint32(14,crc,true); h.setUint32(18,d.length,true); h.setUint32(22,d.length,true); h.setUint16(26,name.length,true);
+    parts.push(new Uint8Array(h.buffer),name,d);
+    const c=new DataView(new ArrayBuffer(46)); c.setUint32(0,0x02014b50,true); c.setUint16(4,20,true); c.setUint16(6,20,true); c.setUint16(8,0x0800,true); c.setUint32(16,crc,true); c.setUint32(20,d.length,true); c.setUint32(24,d.length,true); c.setUint16(28,name.length,true); c.setUint32(42,off,true);
+    central.push(new Uint8Array(c.buffer),name); off+=30+name.length+d.length; }
+  const csize=central.reduce((n,b)=>n+b.length,0);
+  const e=new DataView(new ArrayBuffer(22)); e.setUint32(0,0x06054b50,true); e.setUint16(8,files.length,true); e.setUint16(10,files.length,true); e.setUint32(12,csize,true); e.setUint32(16,off,true);
+  return new Blob([...parts,...central,new Uint8Array(e.buffer)],{type:'application/zip'});
+}
+async function exportSession(){
+  await chain;
+  const sid=S.sid; const rep=await verify(sid);
+  const gsi=await readFile(sid,'raw.gsi'), jsonl=await readFile(sid,'raw.jsonl');
+  const events=await tx(['events'],'readonly', t=>reqP(t.objectStore('events').index('sid').getAll(sid)));
+  const evB=enc.encode(JSON.stringify(events,null,1));
+  const manifest={app:'tachylog-c0', version:VERSION, session:sessionMeta, exported:nowIso(), check:rep,
+    files:{ 'raw.gsi':{bytes:gsi.length, sha256:hex(await crypto.subtle.digest('SHA-256',gsi))},
+            'raw.jsonl':{bytes:jsonl.length, sha256:hex(await crypto.subtle.digest('SHA-256',jsonl))},
+            'events.json':{bytes:evB.length, sha256:hex(await crypto.subtle.digest('SHA-256',evB))} },
+    lastHash:S.prev};
+  const blob=zip([{name:'raw.gsi',data:gsi},{name:'raw.jsonl',data:jsonl},{name:'events.json',data:evB},{name:'manifest.json',data:enc.encode(JSON.stringify(manifest,null,2))}]);
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`tachylog_${sid}.zip`; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href); a.remove();},2000);
+  log('Export', `tachylog_${sid}.zip`,'ok');
+}
+
+/* ---------- Start ---------- */
+$('btnConnect').onclick=connect; $('btnDisconnect').onclick=disconnect;
+$('btnSim').onclick=startSim; $('btnSimCut').onclick=simCut; $('btnSimBurst').onclick=simBurst;
+$('btnVerify').onclick=()=>verify(); $('btnExport').onclick=exportSession; $('btnNew').onclick=()=>newSession(true);
+window.addEventListener('pagehide',()=>{ flushFragment('Seite wird geschlossen'); });
+window.tachylogC0={S, verify, onBytes, simLine, flushFragment, parseGSI, get chain(){return chain;}};
+(async()=>{
+  $('ver').textContent = VERSION;
+  chips();
+  if(location.hash==='#nostart') return; // nur für automatische Tests
+  if(!window.isSecureContext){ setStatus('bad','Kein HTTPS','Web Serial und Prüfsummen brauchen HTTPS oder localhost.'); return; }
+  try{ db=await idbOpen(); await resumeOrCreate(); setStatus('','Nicht verbunden', 'TS07 im Betriebssystem koppeln, dann „Mit TS07 verbinden“.'); log('Seite geladen'); window.tachylogC0.ready=true; }
+  catch(e){ setStatus('bad','Start fehlgeschlagen', e.message); log('Start fehlgeschlagen', e.message,'bad'); }
+})();
+</script>
+</body>
+</html>

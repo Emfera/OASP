@@ -1,0 +1,17 @@
+{
+  "id": "C0",
+  "slug": "c0-webserial-logger",
+  "title": "Web-Serial-Logger für Leica TS07",
+  "question": "Kann ein Browser den TS07 per Bluetooth so loggen, dass bei Abbrüchen keine Zeile verloren geht?",
+  "criteria": [
+    "200 Punkte, mindestens 5 provozierte Abbrüche, keine Zeile verloren",
+    "funktioniert auf Android-Handy und Windows-Notebook",
+    "Verhalten bei gesperrtem Bildschirm und bei Auslösung während einer Trennung ist dokumentiert"
+  ],
+  "track": "Capture",
+  "status": "läuft",
+  "started": "2026-10-21",
+  "decided": null,
+  "result": "Automatischer Test mit Simulator bestanden (11/11). Feldtest mit TS07 ausstehend.",
+  "next": "Feldtest nach README; danach Entscheidung: übernehmen in apps/capture oder verwerfen (dann GSI-Import aus dem Instrumentspeicher)."
+}
